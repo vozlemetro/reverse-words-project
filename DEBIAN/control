@@ -1,0 +1,10 @@
+Package: reverse-words-project
+Version: 1.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Depends: libc6
+Maintainer: Grebennikov <o725b06@voenmeh.ru>
+Description: Программа для обратного порядка слов в строке
+ Принимает строку и возвращает строку со словами в обратном порядке.
+ Вариант 6 - Лабораторная работа 1.
