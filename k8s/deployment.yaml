@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reverse-words
+  labels:
+    app: reverse-words
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: reverse-words
+  template:
+    metadata:
+      labels:
+        app: reverse-words
+      annotations:
+        # Аннотации для Prometheus, который умеет читать их через
+        # kubernetes_sd_configs. Используются как запасной механизм
+        # сбора метрик (если в кластере нет ServiceMonitor CRD).
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8080"
+    spec:
+      containers:
+        - name: reverse-words
+          # Для minikube: соберите образ при активном minikube docker-env
+          # и используйте локальный тег + imagePullPolicy: IfNotPresent.
+          # Для GHCR замените на:
+          #   image: ghcr.io/<USERNAME>/reverse-words-image:latest
+          image: reverse-words:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 1
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+            limits:
+              cpu: "200m"
+              memory: "64Mi"

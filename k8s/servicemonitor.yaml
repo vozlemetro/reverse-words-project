@@ -1,0 +1,21 @@
+# ServiceMonitor — CRD из Prometheus Operator (kube-prometheus-stack).
+# Говорит Prometheus'у скрейпить /metrics с нашего Service'а.
+#
+# ВАЖНО: лейбл release: monitoring должен совпадать с release name
+# при установке kube-prometheus-stack. Если ставите чарт под другим
+# именем — поправьте значение.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: reverse-words
+  labels:
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: reverse-words
+  endpoints:
+    - port: http        # имя порта из Service (k8s/service.yaml)
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 5s
