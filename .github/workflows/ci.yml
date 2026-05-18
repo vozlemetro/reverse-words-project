@@ -9,81 +9,95 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential dpkg-dev
-
-    - name: Make scripts executable
-      run: chmod +x cicd/*.sh
-
-    - name: Build stage
-      run: bash cicd/build.sh
-
-    - name: Upload build artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: reverse-words-binary
-        path: reverse-words
-        retention-days: 1
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential dpkg-dev
+      - name: Make scripts executable
+        run: chmod +x cicd/*.sh
+      - name: Build stage
+        run: bash cicd/build.sh
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: reverse-words-binary
+          path: reverse-words
+          retention-days: 1
 
   test:
     runs-on: ubuntu-latest
     needs: build
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-
-    - name: Download build artifact
-      uses: actions/download-artifact@v3
-      with:
-        name: reverse-words-binary
-
-    - name: Make binary executable
-      run: chmod +x reverse-words
-
-    - name: Make scripts executable
-      run: chmod +x cicd/*.sh
-
-    - name: Test stage
-      run: bash cicd/test.sh
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: reverse-words-binary
+      - name: Make binary executable
+        run: chmod +x reverse-words
+      - name: Make scripts executable
+        run: chmod +x cicd/*.sh
+      - name: Test stage
+        run: bash cicd/test.sh
 
   package:
     runs-on: ubuntu-latest
     needs: test
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential dpkg-dev
+      - name: Make scripts executable
+        run: chmod +x cicd/*.sh
+      - name: Package stage
+        run: bash cicd/package.sh
+      - name: Upload deb package
+        uses: actions/upload-artifact@v4
+        with:
+          name: reverse-words-deb
+          path: build/reverse-words-project.deb
+          retention-days: 7
 
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential dpkg-dev
-
-    - name: Download build artifact
-      uses: actions/download-artifact@v3
-      with:
-        name: reverse-words-binary
-
-    - name: Make binary executable
-      run: chmod +x reverse-words
-
-    - name: Make scripts executable
-      run: chmod +x cicd/*.sh
-
-    - name: Package stage
-      run: bash cicd/package.sh
-
-    - name: Upload deb package
-      uses: actions/upload-artifact@v3
-      with:
-        name: reverse-words-deb
-        path: build/reverse-words-project.deb
-        retention-days: 7
+  deploy:
+    runs-on: ubuntu-latest
+    needs: package
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Download deb artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: reverse-words-deb
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Prepare Dockerfile for image build
+        run: |
+          cat > Dockerfile.deploy <<'EOF'
+          FROM ubuntu:24.04
+          WORKDIR /app
+          COPY reverse-words-project.deb /app/
+          RUN apt-get update && \
+              apt-get install -y --no-install-recommends dpkg && \
+              dpkg -i reverse-words-project.deb || apt-get install -f -y && \
+              rm -rf /var/lib/apt/lists/* /app/reverse-words-project.deb
+          CMD ["sh", "-c", "echo 'hello world from docker' | reverse-words"]
+          EOF
+      - name: Build Docker image
+        run: |
+          docker build -f Dockerfile.deploy -t ghcr.io/${{ github.repository_owner }}/reverse-words-image:latest .
+          docker build -f Dockerfile.deploy -t ghcr.io/${{ github.repository_owner }}/reverse-words-image:${{ github.sha }} .
+      - name: Push Docker image
+        run: |
+          docker push ghcr.io/${{ github.repository_owner }}/reverse-words-image:latest
+          docker push ghcr.io/${{ github.repository_owner }}/reverse-words-image:${{ github.sha }}
